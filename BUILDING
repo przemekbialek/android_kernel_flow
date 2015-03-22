@@ -21,8 +21,6 @@ export SUBARCH=arm
 export CROSS_COMPILE=arm-none-eabi-
 make mrproper
 make msm8916_defconfig
-make bootimage -j10
-make modules -j10
 ./build_cwm_zip.sh
 
 You will now have a TWRP flashable zip at:
