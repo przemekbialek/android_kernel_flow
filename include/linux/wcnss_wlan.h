@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -31,6 +31,7 @@ struct wcnss_wlan_config {
 	int	is_pronto_vt;
 	int	is_pronto_v3;
 	void __iomem	*msm_wcnss_base;
+	int	vbatt;
 };
 
 enum {
@@ -48,6 +49,11 @@ enum {
 	WCNSS_WLAN_MAX_GPIO,
 };
 
+#define WCNSS_VBATT_THRESHOLD           3500000
+#define WCNSS_VBATT_GUARD               20000
+#define WCNSS_VBATT_HIGH                3700000
+#define WCNSS_VBATT_LOW                 3300000
+#define WCNSS_VBATT_INITIAL             3000000
 #define WCNSS_WLAN_IRQ_INVALID -1
 #define HAVE_WCNSS_SUSPEND_RESUME_NOTIFY 1
 #define HAVE_WCNSS_RESET_INTR 1
@@ -67,6 +73,8 @@ enum {
 #define WLAN_RF_DATA0_SHIFT		0
 #define WLAN_RF_DATA1_SHIFT		1
 #define WLAN_RF_DATA2_SHIFT		2
+#define PRONTO_PMU_OFFSET       0x1004
+#define WCNSS_PMU_CFG_GC_BUS_MUX_SEL_TOP   BIT(5)
 
 struct device *wcnss_wlan_get_device(void);
 void wcnss_get_monotonic_boottime(struct timespec *ts);
@@ -104,7 +112,7 @@ void wcnss_riva_log_debug_regs(void);
 void wcnss_pronto_log_debug_regs(void);
 int wcnss_is_hw_pronto_ver3(void);
 int wcnss_device_ready(void);
-int wcnss_cbc_complete(void);
+bool wcnss_cbc_complete(void);
 int wcnss_device_is_shutdown(void);
 void wcnss_riva_dump_pmic_regs(void);
 int wcnss_xo_auto_detect_enabled(void);

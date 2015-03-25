@@ -84,6 +84,12 @@ static inline void msm_vidc_free_reg_table(
 	res->reg_set.reg_tbl = NULL;
 }
 
+static inline void msm_vidc_free_qdss_addr_table(
+			struct msm_vidc_platform_resources *res)
+{
+	res->qdss_addr_set.addr_tbl = NULL;
+}
+
 static inline void msm_vidc_free_bus_vectors(
 			struct msm_vidc_platform_resources *res)
 {
@@ -133,6 +139,7 @@ void msm_vidc_free_platform_resources(
 	msm_vidc_free_regulator_table(res);
 	msm_vidc_free_freq_table(res);
 	msm_vidc_free_reg_table(res);
+	msm_vidc_free_qdss_addr_table(res);
 	msm_vidc_free_bus_vectors(res);
 	msm_vidc_free_iommu_groups(res);
 }
@@ -183,6 +190,58 @@ static int msm_vidc_load_reg_table(struct msm_vidc_platform_resources *res)
 	}
 	return rc;
 }
+static int msm_vidc_load_qdss_table(struct msm_vidc_platform_resources *res)
+{
+	struct addr_set *qdss_addr_set;
+	struct platform_device *pdev = res->pdev;
+	int i;
+	int rc = 0;
+
+	if (!of_find_property(pdev->dev.of_node, "qcom,qdss-presets", NULL)) {
+		/* qcom,qdss-presets is an optional property. It likely won't be
+		 * present if we don't have any register settings to program */
+		dprintk(VIDC_DBG, "qcom,qdss-presets not found\n");
+		return rc;
+	}
+
+	qdss_addr_set = &res->qdss_addr_set;
+	qdss_addr_set->count = get_u32_array_num_elements(pdev,
+					"qcom,qdss-presets");
+	qdss_addr_set->count /= sizeof(*qdss_addr_set->addr_tbl) / sizeof(u32);
+
+	if (qdss_addr_set->count == 0) {
+		dprintk(VIDC_DBG, "no elements in qdss reg set\n");
+		return rc;
+	}
+
+	qdss_addr_set->addr_tbl = devm_kzalloc(&pdev->dev,
+			qdss_addr_set->count * sizeof(*qdss_addr_set->addr_tbl),
+			GFP_KERNEL);
+	if (!qdss_addr_set->addr_tbl) {
+		dprintk(VIDC_ERR, "%s Failed to alloc register table\n",
+			__func__);
+		rc = -ENOMEM;
+		goto err_qdss_addr_tbl;
+	}
+
+	rc = of_property_read_u32_array(pdev->dev.of_node, "qcom,qdss-presets",
+		(u32 *)qdss_addr_set->addr_tbl, qdss_addr_set->count * 2);
+	if (rc) {
+		dprintk(VIDC_ERR, "Failed to read qdss address table\n");
+		msm_vidc_free_qdss_addr_table(res);
+		rc = -EINVAL;
+		goto err_qdss_addr_tbl;
+	}
+
+	for (i = 0; i < qdss_addr_set->count; i++) {
+		dprintk(VIDC_DBG, "qdss addr = %x, value = %x\n",
+				qdss_addr_set->addr_tbl[i].start,
+				qdss_addr_set->addr_tbl[i].size);
+	}
+err_qdss_addr_tbl:
+	return rc;
+}
+
 static int msm_vidc_load_freq_table(struct msm_vidc_platform_resources *res)
 {
 	int rc = 0;
@@ -256,9 +315,11 @@ static int msm_vidc_load_bus_vectors(struct msm_vidc_platform_resources *res)
 	c = 0;
 
 	for_each_child_of_node(bus_node, child_node) {
+		bool passive = false;
 		u32 configs = 0;
 		struct bus_info *bus = &buses->bus_tbl[c];
 
+		passive = of_property_read_bool(child_node, "qcom,bus-passive");
 		rc = of_property_read_u32(child_node, "qcom,bus-configs",
 				&configs);
 		if (rc) {
@@ -266,14 +327,9 @@ static int msm_vidc_load_bus_vectors(struct msm_vidc_platform_resources *res)
 					"Failed to read qcom,bus-configs in %s: %d\n",
 					child_node->name, rc);
 			break;
-		} else if (!configs) {
-			dprintk(VIDC_ERR,
-					"qcom,bus-configs in %s needs to be applicable for some codec\n",
-					child_node->name);
-			rc = -EINVAL;
-			break;
 		}
 
+		bus->passive = passive;
 		bus->sessions_supported = configs;
 		bus->pdata = msm_bus_pdata_from_node(pdev, child_node);
 		if (IS_ERR_OR_NULL(bus->pdata)) {
@@ -282,8 +338,9 @@ static int msm_vidc_load_bus_vectors(struct msm_vidc_platform_resources *res)
 			break;
 		}
 
-		dprintk(VIDC_DBG, "Bus %s supports: %x\n", bus->pdata->name,
-				bus->sessions_supported);
+		dprintk(VIDC_DBG, "Bus %s supports: %x, passive: %d\n",
+				bus->pdata->name, bus->sessions_supported,
+				passive);
 		++c;
 	}
 
@@ -619,19 +676,22 @@ int read_platform_resources_from_dt(
 	res->sys_idle_indicator = of_property_read_bool(pdev->dev.of_node,
 			"qcom,enable-idle-indicator");
 
-	res->minimum_vote = of_property_read_bool(pdev->dev.of_node,
-			"qcom,enable-minimum-voting");
-
 	rc = msm_vidc_load_freq_table(res);
 	if (rc) {
 		dprintk(VIDC_ERR, "Failed to load freq table: %d\n", rc);
 		goto err_load_freq_table;
 	}
+
+	rc = msm_vidc_load_qdss_table(res);
+	if (rc)
+		dprintk(VIDC_WARN, "Failed to load qdss reg table: %d\n", rc);
+
 	rc = msm_vidc_load_reg_table(res);
 	if (rc) {
 		dprintk(VIDC_ERR, "Failed to load reg table: %d\n", rc);
 		goto err_load_reg_table;
 	}
+
 	rc = msm_vidc_load_bus_vectors(res);
 	if (rc) {
 		dprintk(VIDC_ERR, "Failed to load bus vectors: %d\n", rc);

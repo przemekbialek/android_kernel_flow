@@ -149,6 +149,7 @@ static int adreno_ib_add_range(struct kgsl_process_private *process,
 	ib_obj = adreno_ib_check_overlap(gpuaddr, size, type, ib_obj_list);
 	if (ib_obj) {
 		adreno_ib_merge_range(ib_obj, gpuaddr, size);
+		kgsl_mem_entry_put(entry);
 	} else {
 		if (MAX_IB_OBJS == ib_obj_list->num_objs) {
 			KGSL_CORE_ERR("Max objects reached %d\n",
@@ -250,7 +251,7 @@ static int ib_parse_load_state(unsigned int *pkt,
 	 * no need to be fancy about parsing it, just save it if it looks
 	 * like memory
 	 */
-	for (i = 0; i <= (type3_pkt_size(pkt[0] - 2)); i++) {
+	for (i = 0; i <= (type3_pkt_size(pkt[0]) - 2); i++) {
 		ret |= adreno_ib_add_range(process, pkt[2 + i] & 0xFFFFFFFC, 0,
 				SNAPSHOT_GPU_OBJECT_GENERIC,
 				ib_obj_list);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -35,6 +35,8 @@ enum msm_i2_debug_level {
 #define MASK_IS_SET(val, mask)      ((val & mask) == mask)
 #define MASK_IS_SET_BOOL(val, mask) (MASK_IS_SET(val, mask) ? 1 : 0)
 #define KHz(freq) (1000 * freq)
+#define I2C_MSM_CLK_FAST_PLUS_FREQ  (1000000)
+#define I2C_MSM_TAG2_MAX_LEN (4)
 
 /* QUP Registers */
 enum {
@@ -127,6 +129,8 @@ enum {
 	QUP_BUS_ERROR           = 1U << 2,
 	QUP_PACKET_NACKED       = 1U << 3,
 	QUP_ARB_LOST            = 1U << 4,
+	QUP_INVALID_WRITE	= 1U << 5,
+	QUP_FAILED		= 3U << 6,
 	QUP_BUS_ACTIVE          = 1U << 8,
 	QUP_BUS_MASTER          = 1U << 9,
 	QUP_INVALID_TAG         = 1U << 23,
@@ -134,17 +138,12 @@ enum {
 	QUP_INVALID_READ_SEQ    = 1U << 25,
 	QUP_I2C_SDA             = 1U << 26,
 	QUP_I2C_SCL             = 1U << 27,
-	QUP_MSTR_STTS_ERR_MASK  = 0x380003C,
+	QUP_MSTR_STTS_ERR_MASK  = 0x38000FC,
 };
 
 /* Register:QUP_I2C_MASTER_CONFIG fields */
 enum {
 	QUP_EN_VERSION_TWO_TAG  = 1U,
-};
-
-enum {
-	I2C_MSM_CLK_FAST_MAX_FREQ    = 1000000,
-	I2C_MSM_CLK_HIGH_MAX_FREQ    = 3400000,
 };
 
 /* Register:QUP_I2C_MASTER_CLK_CTL field setters */
@@ -200,20 +199,21 @@ enum msm_i2c_power_state {
 
 /*
  * The max buffer size required for tags is for holding the following sequence:
- * [start | hs-addr] + [start | slv-addr] + [ rd/wr | len]
+ * [start] + [start | slv-addr] + [ rd/wr | len]
  * which sum up to 6 bytes. However, we use u64 to hold the value, thus we say
  * that max length is 8 bytes.
  */
-#define I2C_MSM_TAG2_MAX_LEN            (8)
+#define I2C_MSM_TAG2_MAX_LEN            (4)
 #define I2C_MSM_BAM_CONS_SZ             (64) /* consumer pipe n entries */
 #define I2C_MSM_BAM_PROD_SZ             (32) /* producer pipe n entries */
 #define I2C_MSM_BAM_DESC_ARR_SIZ  (I2C_MSM_BAM_CONS_SZ + I2C_MSM_BAM_PROD_SZ)
 #define I2C_MSM_REG_2_STR_BUF_SZ        (128)
+/* Optimal value to hold the error strings */
+#define I2C_MSM_MAX_ERR_BUF_SZ		(256)
 #define I2C_MSM_BUF_DUMP_MAX_BC         (20)
 #define I2C_MSM_MAX_POLL_MSEC           (100)
 #define I2C_MSM_TIMEOUT_SAFTY_COEF      (10)
 #define I2C_MSM_TIMEOUT_MIN_USEC        (500000)
-#define I2C_MSM_HS_ADDR                 (0x0f)
 #define I2C_QUP_MAX_BUS_RECOVERY_RETRY  (10)
 
 /* QUP v2 tags */
@@ -226,9 +226,6 @@ enum msm_i2c_power_state {
 #define QUP_TAG2_START_STOP        (0x8AULL)
 #define QUP_TAG2_INPUT_EOT         (0x93ULL)
 #define QUP_TAG2_FLUSH_STOP        (0x96ULL)
-/* Aggregate the constatnt values of HS start sequence */
-#define QUP_TAG2_START_HS  (QUP_TAG2_START | (I2C_MSM_HS_ADDR << 8) | \
-			   (QUP_TAG2_START << 16))
 
 enum msm_spi_clk_path_vec_idx {
 	I2C_MSM_CLK_PATH_SUSPEND_VEC,
@@ -379,9 +376,13 @@ struct i2c_msm_xfer_mode_bam {
  * | input_tag | eot_... | tag_arr 0 | tag_arr 1 | .. | tag_arr n |
  * +-----------+---------+-----------+-----------+----+-----------+
  *
- * I2C_MSM_TAG2_MAX_LEN bytes for input_tag
- * I2C_MSM_TAG2_MAX_LEN bytes for eot_n_flush_stop_tags
- * I2C_MSM_BAM_DESC_ARR_SIZ * I2C_MSM_TAG2_MAX_LEN bytes for tag_arr
+ * Why +2?
+ * One tag buffer for the input tags. This is a write only buffer for BAM, it is
+ *    used to read the tags of the input fifo. We let them overwrite each other,
+ *    since it is a throw-away from the driver's perspective.
+ * Second tag buffer for the EOT and flush-stop tags. This is a read only
+ *    buffer (from BAM perspective). It is used to put EOT and flush-stop at the
+ *    end of every transaction.
  */
 #define I2C_MSM_BAM_TAG_MEM_SZ  \
 	((I2C_MSM_BAM_DESC_ARR_SIZ + 2) * I2C_MSM_TAG2_MAX_LEN)
@@ -598,14 +599,14 @@ struct i2c_msm_prof_event {
 	u8              type;
 };
 
-enum i2c_msm_err_bit_field {
-	I2C_MSM_ERR_NONE     = 0,
-	I2C_MSM_ERR_NACK     = 1U << 0,
-	I2C_MSM_ERR_ARB_LOST = 1U << 1,
-	I2C_MSM_ERR_BUS_ERR  = 1U << 2,
-	I2C_MSM_ERR_TIMEOUT  = 1U << 3,
-	I2C_MSM_ERR_CORE_CLK = 1U << 4,
-	I2C_MSM_ERR_OVR_UNDR_RUN = 1U << 5,
+enum i2c_msm_err {
+	I2C_MSM_NO_ERR = 0,
+	I2C_MSM_ERR_NACK,
+	I2C_MSM_ERR_ARB_LOST,
+	I2C_MSM_ERR_BUS_ERR,
+	I2C_MSM_ERR_TIMEOUT,
+	I2C_MSM_ERR_CORE_CLK,
+	I2C_MSM_ERR_OVR_UNDR_RUN,
 };
 
 /*
@@ -636,7 +637,7 @@ struct i2c_msm_xfer {
 	struct i2c_msm_xfer_buf    cur_buf;
 	u32                        timeout;
 	bool                       last_is_rx;
-	enum i2c_msm_err_bit_field err;
+	enum i2c_msm_err           err;
 	struct i2c_msm_prof_event  event[I2C_MSM_PROF_MAX_EVNTS];
 	atomic_t                   event_cnt;
 	atomic_t                   is_active;
@@ -653,10 +654,6 @@ struct i2c_msm_xfer {
  * @dbgfs    debug-fs root and values that may be set via debug-fs.
  * @rsrcs    resources from platform data including clocks, gpios, irqs, and
  *           memory regions.
- * @noise_rjct_scl noise rejection value for the scl line (a field of
- *           I2C_MASTER_CLK_CTL).
- * @noise_rjct_sda noise rejection value for the sda line (a field of
- *           I2C_MASTER_CLK_CTL).
  * @pdata    the platform data (values from board-file or from device-tree)
  * @mstr_clk_ctl cached value for programming to mstr_clk_ctl register
  */
@@ -667,8 +664,6 @@ struct i2c_msm_ctrl {
 	struct i2c_msm_xfer        xfer;
 	struct i2c_msm_dbgfs       dbgfs;
 	struct i2c_msm_resources   rsrcs;
-	int                        noise_rjct_scl;
-	int                        noise_rjct_sda;
 	u32                        mstr_clk_ctl;
 	struct i2c_msm_v2_platform_data *pdata;
 	enum msm_i2c_power_state   pwr_state;

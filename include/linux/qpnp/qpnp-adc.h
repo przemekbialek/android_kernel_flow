@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -140,6 +140,7 @@ enum qpnp_iadc_channels {
 #define QPNP_ADC_625_UV	625000
 #define QPNP_ADC_HWMON_NAME_LENGTH				64
 #define QPNP_MAX_PROP_NAME_LEN					32
+#define QPNP_THERMALNODE_NAME_LENGTH                            25
 
 /* Structure device for qpnp vadc */
 struct qpnp_vadc_chip;
@@ -251,6 +252,10 @@ enum qpnp_adc_channel_scaling_param {
  *          btm parameters for SKUG.
  * %SCALE_QRD_SKUH_BATT_THERM: Conversion to temperature(decidegC) based on
  *          btm parameters for SKUH
+ * %SCALE_QRD_SKUC_BATT_THERM: Conversion to temperature(decidegC) based on
+ *          btm parameters for SKUC
+ * %SCALE_QRD_SKUE_BATT_THERM: Conversion to temperature(decidegC) based on
+ *          btm parameters for SKUE
  * %SCALE_NONE: Do not use this scaling type.
  */
 enum qpnp_adc_scale_fn_type {
@@ -266,6 +271,8 @@ enum qpnp_adc_scale_fn_type {
 	SCALE_QRD_SKUG_BATT_THERM,
 	SCALE_QRD_SKUH_BATT_THERM,
 	SCALE_NCP_03WF683_THERM,
+	SCALE_QRD_SKUC_BATT_THERM,
+	SCALE_QRD_SKUE_BATT_THERM,
 	SCALE_NONE,
 };
 
@@ -1088,6 +1095,8 @@ struct qpnp_adc_amux_properties {
 #define QPNP_REV_ID_8916_1_0	10
 #define QPNP_REV_ID_8916_1_1	11
 #define QPNP_REV_ID_8916_2_0	12
+#define QPNP_REV_ID_8909_1_0	13
+#define QPNP_REV_ID_8909_1_1	14
 
 /* Public API */
 #if defined(CONFIG_SENSORS_QPNP_ADC_VOLTAGE)				\
@@ -1247,6 +1256,40 @@ int32_t qpnp_adc_scale_qrd_skug_batt_therm(struct qpnp_vadc_chip *dev,
  * @chan_rslt:	physical result to be stored.
  */
 int32_t qpnp_adc_scale_qrd_skuh_batt_therm(struct qpnp_vadc_chip *dev,
+			int32_t adc_code,
+			const struct qpnp_adc_properties *adc_prop,
+			const struct qpnp_vadc_chan_properties *chan_prop,
+			struct qpnp_vadc_result *chan_rslt);
+/**
+ * qpnp_adc_scale_qrd_skuc_batt_therm() - Scales the pre-calibrated digital output
+ *		of an ADC to the ADC reference and compensates for the
+ *		gain and offset. Returns the temperature in decidegC.
+ * @dev:	Structure device for qpnp vadc
+ * @adc_code:	pre-calibrated digital ouput of the ADC.
+ * @adc_prop:	adc properties of the pm8xxx adc such as bit resolution,
+ *		reference voltage.
+ * @chan_prop:	individual channel properties to compensate the i/p scaling,
+ *		slope and offset.
+ * @chan_rslt:	physical result to be stored.
+ */
+int32_t qpnp_adc_scale_qrd_skuc_batt_therm(struct qpnp_vadc_chip *dev,
+			int32_t adc_code,
+			const struct qpnp_adc_properties *adc_prop,
+			const struct qpnp_vadc_chan_properties *chan_prop,
+			struct qpnp_vadc_result *chan_rslt);
+/**
+ * qpnp_adc_scale_qrd_skue_batt_therm() - Scales the pre-calibrated digital output
+ *		of an ADC to the ADC reference and compensates for the
+ *		gain and offset. Returns the temperature in decidegC.
+ * @dev:	Structure device for qpnp vadc
+ * @adc_code:	pre-calibrated digital ouput of the ADC.
+ * @adc_prop:	adc properties of the pm8xxx adc such as bit resolution,
+ *		reference voltage.
+ * @chan_prop:	individual channel properties to compensate the i/p scaling,
+ *		slope and offset.
+ * @chan_rslt:	physical result to be stored.
+ */
+int32_t qpnp_adc_scale_qrd_skue_batt_therm(struct qpnp_vadc_chip *dev,
 			int32_t adc_code,
 			const struct qpnp_adc_properties *adc_prop,
 			const struct qpnp_vadc_chan_properties *chan_prop,
@@ -1658,6 +1701,18 @@ static inline int32_t qpnp_adc_scale_qrd_skug_batt_therm(
 			struct qpnp_vadc_result *chan_rslt)
 { return -ENXIO; }
 static inline int32_t qpnp_adc_scale_qrd_skuh_batt_therm(
+			struct qpnp_vadc_chip *vdev, int32_t adc_code,
+			const struct qpnp_adc_properties *adc_prop,
+			const struct qpnp_vadc_chan_properties *chan_prop,
+			struct qpnp_vadc_result *chan_rslt)
+{ return -ENXIO; }
+static inline int32_t qpnp_adc_scale_qrd_skuc_batt_therm(
+			struct qpnp_vadc_chip *vdev, int32_t adc_code,
+			const struct qpnp_adc_properties *adc_prop,
+			const struct qpnp_vadc_chan_properties *chan_prop,
+			struct qpnp_vadc_result *chan_rslt)
+{ return -ENXIO; }
+static inline int32_t qpnp_adc_scale_qrd_skue_batt_therm(
 			struct qpnp_vadc_chip *vdev, int32_t adc_code,
 			const struct qpnp_adc_properties *adc_prop,
 			const struct qpnp_vadc_chan_properties *chan_prop,
