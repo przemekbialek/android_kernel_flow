@@ -28,7 +28,7 @@
 #define MAX_ACTUATOR_SCENARIO     8
 #define MAX_ACT_MOD_NAME_SIZE     32
 #define MAX_ACT_NAME_SIZE         32
-#define MAX_ACTUATOR_INIT_SET     12
+#define MAX_ACTUATOR_INIT_SET     32
 #define MAX_I2C_REG_SET           12
 
 #define MAX_NAME_SIZE             32
@@ -61,6 +61,20 @@ enum msm_sensor_power_seq_type_t {
 	SENSOR_VREG,
 	SENSOR_I2C_MUX,
 	SENSOR_I2C,
+};
+
+enum msm_camera_qup_i2c_write_batch_size_t {
+	MSM_CAMERA_I2C_BATCH_SIZE_1 = 1,
+	MSM_CAMERA_I2C_BATCH_SIZE_2,
+	MSM_CAMERA_I2C_BATCH_SIZE_3,
+	MSM_CAMERA_I2C_BATCH_SIZE_4,
+	MSM_CAMERA_I2C_BATCH_SIZE_5,
+	MSM_CAMERA_I2C_BATCH_SIZE_MAX,
+};
+
+enum msm_camera_qup_i2c_write_batch_t {
+	MSM_CAMREA_I2C_BATCH_DISABLE = 0,
+	MSM_CAMERA_I2C_BATCH_ENABLE,
 };
 
 enum msm_camera_i2c_reg_addr_type {
@@ -253,6 +267,7 @@ struct msm_camera_i2c_reg_setting {
 	enum msm_camera_i2c_reg_addr_type addr_type;
 	enum msm_camera_i2c_data_type data_type;
 	uint16_t delay;
+	enum msm_camera_qup_i2c_write_batch_t qup_i2c_batch;
 };
 
 struct msm_camera_csid_vc_cfg {

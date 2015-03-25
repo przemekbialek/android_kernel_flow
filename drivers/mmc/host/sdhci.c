@@ -48,6 +48,9 @@
 
 #define MAX_TUNING_LOOP 40
 
+#define SDHCI_DBG_DUMP_RS_INTERVAL (10 * HZ)
+#define SDHCI_DBG_DUMP_RS_BURST 2
+
 static unsigned int debug_quirks = 0;
 static unsigned int debug_quirks2;
 
@@ -1062,8 +1065,14 @@ static void sdhci_set_transfer_mode(struct sdhci_host *host,
 
 	if (data->flags & MMC_DATA_READ) {
 		mode |= SDHCI_TRNS_READ;
-		if (host->ops->toggle_cdr)
-			host->ops->toggle_cdr(host, true);
+		if (host->ops->toggle_cdr) {
+			if ((cmd->opcode == MMC_SEND_TUNING_BLOCK_HS200) ||
+				(cmd->opcode == MMC_SEND_TUNING_BLOCK_HS400) ||
+				(cmd->opcode == MMC_SEND_TUNING_BLOCK))
+				host->ops->toggle_cdr(host, false);
+			else
+				host->ops->toggle_cdr(host, true);
+		}
 	}
 	if (host->ops->toggle_cdr && (data->flags & MMC_DATA_WRITE))
 		host->ops->toggle_cdr(host, false);
@@ -1520,10 +1529,18 @@ static int sdhci_set_power(struct sdhci_host *host, unsigned short power)
 static int sdhci_enable(struct mmc_host *mmc)
 {
 	struct sdhci_host *host = mmc_priv(mmc);
+	u32 pol_index = 0;
 
-	if (host->cpu_dma_latency_us)
-		pm_qos_update_request(&host->pm_qos_req_dma,
-					host->cpu_dma_latency_us);
+	if (unlikely(!host->cpu_dma_latency_us))
+		goto platform_bus_vote;
+
+	if (host->cpu_dma_latency_tbl_sz > 1)
+		pol_index = host->power_policy;
+
+	pm_qos_update_request(&host->pm_qos_req_dma,
+		host->cpu_dma_latency_us[pol_index]);
+
+platform_bus_vote:
 	if (host->ops->platform_bus_voting)
 		host->ops->platform_bus_voting(host, 1);
 
@@ -1533,24 +1550,29 @@ static int sdhci_enable(struct mmc_host *mmc)
 static int sdhci_disable(struct mmc_host *mmc)
 {
 	struct sdhci_host *host = mmc_priv(mmc);
+	u32 pol_index = 0;
 
-	if (host->cpu_dma_latency_us) {
-		/*
-		 * In performance mode, release QoS vote after a timeout to
-		 * make sure back-to-back requests don't suffer from latencies
-		 * that are involved to wake CPU from low power modes in cases
-		 * where the CPU goes into low power mode as soon as QoS vote is
-		 * released.
-		 */
-		if (host->power_policy == SDHCI_PERFORMANCE_MODE)
-			pm_qos_update_request_timeout(&host->pm_qos_req_dma,
-					host->cpu_dma_latency_us,
-					host->pm_qos_timeout_us);
-		else
-			pm_qos_update_request(&host->pm_qos_req_dma,
-					PM_QOS_DEFAULT_VALUE);
-	}
+	if (unlikely(!host->cpu_dma_latency_us))
+		goto platform_bus_vote;
 
+	if (host->cpu_dma_latency_tbl_sz > 1)
+		pol_index = host->power_policy;
+	/*
+	 * In performance mode, release QoS vote after a timeout to
+	 * make sure back-to-back requests don't suffer from latencies
+	 * that are involved to wake CPU from low power modes in cases
+	 * where the CPU goes into low power mode as soon as QoS vote is
+	 * released.
+	 */
+	if (host->power_policy == SDHCI_POWER_SAVE_MODE)
+		pm_qos_update_request(&host->pm_qos_req_dma,
+			PM_QOS_DEFAULT_VALUE);
+	else
+		pm_qos_update_request_timeout(&host->pm_qos_req_dma,
+			host->cpu_dma_latency_us[pol_index],
+			host->pm_qos_timeout_us);
+
+platform_bus_vote:
 	if (host->ops->platform_bus_voting)
 		host->ops->platform_bus_voting(host, 0);
 
@@ -1571,6 +1593,9 @@ static int sdhci_notify_load(struct mmc_host *mmc, enum mmc_load state)
 	switch (state) {
 	case MMC_LOAD_HIGH:
 		sdhci_update_power_policy(host, SDHCI_PERFORMANCE_MODE);
+		break;
+	case MMC_LOAD_INIT:
+		sdhci_update_power_policy(host, SDHCI_PERFORMANCE_MODE_INIT);
 		break;
 	case MMC_LOAD_LOW:
 		sdhci_update_power_policy(host, SDHCI_POWER_SAVE_MODE);
@@ -2975,7 +3000,7 @@ static void sdhci_data_irq(struct sdhci_host *host, u32 intmask)
 			} else
 				pr_msg = false;
 		}
-		if (pr_msg) {
+		if (pr_msg && __ratelimit(&host->dbg_dump_rs)) {
 			pr_err("%s: data txfr (0x%08x) error: %d after %lld ms\n",
 			       mmc_hostname(host->mmc), intmask,
 			       host->data->error, ktime_to_ms(ktime_sub(
@@ -3404,6 +3429,8 @@ struct sdhci_host *sdhci_alloc_host(struct device *dev,
 
 	spin_lock_init(&host->lock);
 	mutex_init(&host->ios_mutex);
+	ratelimit_state_init(&host->dbg_dump_rs, SDHCI_DBG_DUMP_RS_INTERVAL,
+			SDHCI_DBG_DUMP_RS_BURST);
 
 	return host;
 }
@@ -3615,6 +3642,7 @@ int sdhci_add_host(struct sdhci_host *host)
 			>> SDHCI_CLOCK_BASE_SHIFT;
 
 	host->max_clk *= 1000000;
+	sdhci_update_power_policy(host, SDHCI_PERFORMANCE_MODE_INIT);
 	if (host->max_clk == 0 || host->quirks &
 			SDHCI_QUIRK_CAP_CLOCK_BASE_BROKEN) {
 		if (!host->ops->get_max_clock) {
@@ -4071,6 +4099,7 @@ void sdhci_remove_host(struct sdhci_host *host, int dead)
 		spin_unlock_irqrestore(&host->lock, flags);
 	}
 
+	sdhci_update_power_policy(host, SDHCI_POWER_SAVE_MODE);
 	sdhci_disable_card_detection(host);
 
 	if (host->cpu_dma_latency_us)
