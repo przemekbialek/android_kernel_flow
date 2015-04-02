@@ -632,7 +632,7 @@ void mdp3_bus_bw_iommu_enable(int enable, int client)
 		mdp3_bus_scale_set_quota(client, ab, ib);
 	} else if (!enable && ref_cnt == 0) {
 		mdp3_bus_scale_set_quota(client, 0, 0);
-		mdp3_iommu_disable();
+		mdp3_iommu_disable(client);
 	} else if (ref_cnt < 0) {
 		pr_err("Ref count < 0, bus client=%d, ref_cnt=%d",
 				client_idx, ref_cnt);
@@ -1407,11 +1407,15 @@ done:
 	return ret;
 }
 
-int mdp3_iommu_enable()
+int mdp3_iommu_enable(int client)
 {
-	int i, rc = 0;
+	int i, rc = 0, ref_cnt = 0;
 
-	if (mdp3_res->iommu_ref_cnt == 0) {
+	for (i = 0; i < MDP3_CLIENT_MAX; i++)
+		ref_cnt += mdp3_res->iommu_ref_cnt[i];
+
+	if (ref_cnt == 0) {
+		mdp3_bus_scale_set_quota(MDP3_CLIENT_IOMMU, SZ_1M, SZ_1M);
 		for (i = 0; i < MDP3_IOMMU_CTX_MAX; i++) {
 			rc = mdp3_iommu_attach(i);
 			if (rc) {
@@ -1423,23 +1427,31 @@ int mdp3_iommu_enable()
 	}
 
 	if (!rc)
-		mdp3_res->iommu_ref_cnt++;
+		mdp3_res->iommu_ref_cnt[client]++;
 
+	pr_debug("client :%d client_ref_cnt: %d total_ref_cnt: %d\n",
+		client, mdp3_res->iommu_ref_cnt[client], ref_cnt);
 	return rc;
 }
 
-int mdp3_iommu_disable()
+int mdp3_iommu_disable(int client)
 {
-	int i, rc = 0;
+	int i, rc = 0, ref_cnt = 0;
 
-	if (mdp3_res->iommu_ref_cnt) {
-		mdp3_res->iommu_ref_cnt--;
-		if (mdp3_res->iommu_ref_cnt == 0) {
+	if (mdp3_res->iommu_ref_cnt[client]) {
+		mdp3_res->iommu_ref_cnt[client]--;
+
+		for (i = 0; i < MDP3_CLIENT_MAX; i++)
+			ref_cnt += mdp3_res->iommu_ref_cnt[i];
+
+		pr_debug("client :%d client_ref_cnt: %d total_ref_cnt: %d\n",
+			client, mdp3_res->iommu_ref_cnt[client], ref_cnt);
+		if (ref_cnt == 0) {
 			for (i = 0; i < MDP3_IOMMU_CTX_MAX; i++)
 				rc = mdp3_iommu_dettach(i);
 		}
 	} else {
-		pr_err("iommu ref count unbalanced\n");
+		pr_err("iommu ref count unbalanced for client %d\n", client);
 	}
 
 	return rc;
@@ -1450,9 +1462,9 @@ int mdp3_iommu_ctrl(int enable)
 	int rc;
 
 	if (enable)
-		rc = mdp3_iommu_enable();
+		rc = mdp3_iommu_enable(MDP3_CLIENT_DSI);
 	else
-		rc = mdp3_iommu_disable();
+		rc = mdp3_iommu_disable(MDP3_CLIENT_DSI);
 	return rc;
 }
 
