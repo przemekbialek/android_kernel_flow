@@ -570,6 +570,7 @@ static int pil_load_seg(struct pil_desc *desc, struct pil_seg *seg)
 						      desc->unmap_fw_mem, map_data);
 			if (ret >= 0) break;
 			msleep(10);
+			pil_err(desc, "Failed to load blob %s. Retrying. ERR %i\n", fw_name, ret);
 		}
 
 		if (ret < 0) {
