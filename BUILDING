@@ -14,7 +14,7 @@ export ARCH=arm
 export SUBARCH=arm
 export CROSS_COMPILE=arm-linux-gnueabihf-
 make mrproper
-make msm8916_defconfig
+make msm8916_defconfig TARGET_BUILD_VARIANT=user
 ./build_cwm_zip.sh
 
 You will now have a TWRP flashable zip at:
