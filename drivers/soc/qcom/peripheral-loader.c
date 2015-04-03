@@ -33,6 +33,7 @@
 #include <linux/of_address.h>
 #include <linux/io.h>
 #include <linux/dma-mapping.h>
+#include <linux/delay.h>
 #include <soc/qcom/ramdump.h>
 #include <soc/qcom/subsystem_restart.h>
 
@@ -553,16 +554,27 @@ static int pil_load_seg(struct pil_desc *desc, struct pil_seg *seg)
 		.dev = desc->dev,
 	};
 	void *map_data = desc->map_data ? desc->map_data : &map_fw_info;
+	int retries;
+	const int max_retries = 3;
 
 	if (seg->filesz) {
 		snprintf(fw_name, ARRAY_SIZE(fw_name), "%s.b%02d",
 				desc->name, num);
-		ret = request_firmware_direct(fw_name, desc->dev, seg->paddr,
-					      seg->filesz, desc->map_fw_mem,
-					      desc->unmap_fw_mem, map_data);
+
+		// SQK: HACK to deal with what seems to be a race condition that sometimes
+		// causes wcnss firmware to fail to load
+		for (retries = 0; retries < max_retries; retries++)
+		{
+			ret = request_firmware_direct(fw_name, desc->dev, seg->paddr,
+						      seg->filesz, desc->map_fw_mem,
+						      desc->unmap_fw_mem, map_data);
+			if (ret >= 0) break;
+			msleep(10);
+		}
+
 		if (ret < 0) {
-			pil_err(desc, "Failed to locate blob %s or blob is too big.\n",
-				fw_name);
+			pil_err(desc, "Failed to locate blob %s or blob is too big. ERR %i\n",
+				fw_name, ret);
 			return ret;
 		}
 
