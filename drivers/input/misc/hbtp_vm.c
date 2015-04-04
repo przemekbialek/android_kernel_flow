@@ -156,7 +156,7 @@ static int hbtp_vm_report_clicks(struct hbtp_virtual_mouse *hbtp_data,
 static long hbtp_vm_ioctl(struct file *file, unsigned int cmd,
 			unsigned long arg)
 {
-	int error;
+	int error = 0;
 	struct hbtp_input_mt mt_data;
 	struct hbtp_vm_click clik_data;
 
@@ -251,7 +251,7 @@ static struct miscdevice hbtp_vm_misc = {
 
 static int __init hbtp_vm_init(void)
 {
-	int error;
+	int error = 0;
 
 	hbtp_vm = kzalloc(sizeof(struct hbtp_virtual_mouse), GFP_KERNEL);
 
