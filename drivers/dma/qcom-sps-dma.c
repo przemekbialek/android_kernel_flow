@@ -563,7 +563,7 @@ static struct dma_async_tx_descriptor *qbam_prep_slave_sg(struct dma_chan *chan,
 	struct qbam_async_tx_descriptor *qbam_desc;
 	struct scatterlist *sg;
 	u32 i;
-	struct qbam_xfer_buf *xfer;
+	struct qbam_xfer_buf *xfer = NULL;
 
 	if (qbam_chan->direction != direction) {
 		qbam_err(qbam_dev,
