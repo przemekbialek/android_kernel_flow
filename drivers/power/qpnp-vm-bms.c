@@ -1737,7 +1737,7 @@ static int report_state_of_charge(struct qpnp_bms_chip *chip)
 static void btm_notify_vbat(enum qpnp_tm_state state, void *ctx)
 {
 	struct qpnp_bms_chip *chip = ctx;
-	int vbat_uv;
+	int vbat_uv = 0;
 	int rc;
 
 	rc = get_battery_voltage(chip, &vbat_uv);
@@ -1999,7 +1999,7 @@ static void calculate_reported_soc(struct qpnp_bms_chip *chip)
 
 static int clamp_soc_based_on_voltage(struct qpnp_bms_chip *chip, int soc)
 {
-	int rc, vbat_uv;
+	int rc, vbat_uv = 0;
 
 	rc = get_battery_voltage(chip, &vbat_uv);
 	if (rc < 0) {
