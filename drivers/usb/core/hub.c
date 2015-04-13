@@ -4839,6 +4839,7 @@ static void hub_events(void)
 		} else {
 			usb_get_dev(hub->hdev);
 		}
+		hdev = hub->hdev;
 		spin_unlock_irq(&hub_event_lock);
 
 		hub_dev = hub->intfdev;
