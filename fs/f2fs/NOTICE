@@ -1,4 +1,4 @@
-Taken from Motorola Mobility LLC GitHub on March 16, 2015
-Source Repository: https://github.com/MotorolaMobilityLLC/motorola-kernel.git
-Source Branch: lollipop-5.0.2-release-styxlte
-Source Commit: e3d48c65cb2ad0a92ea28321769bdc24daff2ccf
+Taken from CodeAurora Forum Git Repository on April 21, 2015
+Source Repository: git://codeaurora.org/quic/filesystems/fs/external/f2fs
+Source Branch: kernel.org/linux-3.10
+Source Commit: 39f6ee4a51fd01658ec538c971ac435edd4d4d2b
