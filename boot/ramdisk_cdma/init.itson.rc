@@ -1,0 +1,22 @@
+#IKCBS-8536 FEATURE-4111 Integrate ItsOn
+service itsonbs /system/vendor/bin/itson-bootstrapper.sh
+    class boot
+    oneshot
+    critical
+
+on early-init
+    mkdir /carrier 0771 itson system
+
+on fs
+    wait /dev/block/platform/soc.0/by-name/carrier
+    mount ext4 /dev/block/platform/soc.0/by-name/carrier /carrier nosuid nodev barrier=1
+    restorecon_recursive /carrier
+    chown  itson system /carrier
+    chmod 0771 /carrier
+
+on post-fs-data
+    mkdir /dev/socket/itson 02771 itson itson
+    mkdir /data/itson 02770 itson itson
+    start itsonbs
+
+#IKCBS-8536 FEATURE-4111 Integrate ItsOn

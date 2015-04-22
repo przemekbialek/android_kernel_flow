@@ -92,9 +92,6 @@ on boot
     chown root mot_tcmd /sys/module/phy_msm_usb/parameters/host_mode_disable
     chmod 0660 /sys/module/phy_msm_usb/parameters/host_mode_disable
 
-    # Create moodle directory that MOT_MOODLE can write to
-    mkdir /data/local/moodle 0770 graphics mot_tcmd
-
     insmod /system/lib/modules/touchx.ko
 
 on fs
