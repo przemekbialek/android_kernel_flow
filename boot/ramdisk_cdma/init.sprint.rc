@@ -1,3 +1,5 @@
+import /init.itson.rc
+
 #IKJBXLINE-3860 add omadm load property service
 service omadmLoadProp /system/bin/Omadmloadproperty
     class boot
@@ -43,3 +45,55 @@ on boot
 #Permission for telephony
     mkdir /persist/telephony 0770 radio radio
 
+#IKCBS-6356 Add Slate
+service slateipcd /system/bin/slateipcd
+    class main
+    user root
+    disabled
+
+on property:sys.usb.config=charge_only
+    write /sys/class/android_usb/android0/enable 0
+    write /sys/class/android_usb/android0/bDeviceClass 0
+    write /sys/class/android_usb/android0/bDeviceSubClass 0
+    write /sys/class/android_usb/android0/bDeviceProtocol 0
+    write /sys/class/android_usb/android0/idProduct 0x2e36
+    write /sys/class/android_usb/android0/idVendor 0x22b8
+    write /sys/class/android_usb/android0/f_mass_storage/lun/file 0
+    write /sys/class/android_usb/android0/functions mass_storage
+    write /sys/class/android_usb/android0/ctrl_adb_pid 0
+    write /sys/class/android_usb/android0/enable 1
+    setprop sys.usb.state $sys.usb.config
+
+on property:sys.usb.config=charge_only,adb
+    write /sys/class/android_usb/android0/enable 0
+    write /sys/class/android_usb/android0/bDeviceClass 0
+    write /sys/class/android_usb/android0/bDeviceSubClass 0
+    write /sys/class/android_usb/android0/bDeviceProtocol 0
+    write /sys/class/android_usb/android0/idProduct 0x2e36
+    write /sys/class/android_usb/android0/idVendor 0x22b8
+    write /sys/class/android_usb/android0/f_mass_storage/lun/file 0
+    write /sys/class/android_usb/android0/functions mass_storage
+    write /sys/class/android_usb/android0/ctrl_adb_pid 0
+    write /sys/class/android_usb/android0/enable 1
+    setprop sys.usb.state $sys.usb.config
+
+#Begin IKCBS-6427
+on property:service.slate.keyevent=true
+    chmod 0666 /dev/diag
+
+on property:service.slate.penevent=true
+    chmod 0666 /dev/diag
+
+on property:service.slate.keyevent=false
+    chmod 0660 /dev/diag
+
+on property:service.slate.penevent=false
+    chmod 0660 /dev/diag
+#End IKCBS-6427
+
+#Begin IKCBS-6487
+on property:persist.radio.usbdiag=1
+    start slateipcd
+on property:persist.radio.usbdiag=0
+    stop slateipcd
+#End IKCBS-6487
