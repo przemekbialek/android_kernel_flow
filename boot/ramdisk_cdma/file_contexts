@@ -555,7 +555,6 @@
 /data/dontpanic(/.*)?              u:object_r:panic_data_file:s0
 /data/hostapd(/.*)?                u:object_r:hostapd_data_file:s0
 /data/local/dbvc(/.*)?             u:object_r:dbvc_data_file:s0
-/data/local/moodle(/.*)?           u:object_r:moodle_data_file:s0
 /data/power_supply_logger(/.*)?    u:object_r:aplog_data_file:s0
 /data/system/dropbox-add(/.*)?     u:object_r:dropbox_data_file:s0
 /data/misc/akmd_set.txt            u:object_r:akmd_data_file:s0
@@ -690,3 +689,13 @@
 /sys/module/qpnp_bms(/.*)?              u:object_r:sysfs_batt:s0
 /sys/module/qpnp_charger(/.*)?          u:object_r:sysfs_batt:s0
 /sys/devices/platform/msm_ssbi.0/pm8921-core/pm8921-charger(/.*)? u:object_r:sysfs_batt:s0
+#line 1 "motorola/security/sepolicy/sprint/file_contexts"
+##########################
+# slate daemon for sprint
+/system/bin/slateipcd           u:object_r:slateipcd_exec:s0
+
+#for itson
+/carrier(/.*)?                             u:object_r:carrier_file:s0
+/carrier/itson(/.*)?                       u:object_r:itson_file:s0
+/dev/socket/itson(/.*)?                    u:object_r:itson_socket:s0
+/data/itson(/.*)?                          u:object_r:itson_data_file:s0

@@ -92,7 +92,7 @@ static int recover_dentry(struct inode *inode, struct page *ipage)
 		goto out_err;
 	}
 retry:
-	de = f2fs_find_entry(dir, &name, &page, 0);
+	de = f2fs_find_entry(dir, &name, &page);
 	if (de && inode->i_ino == le32_to_cpu(de->ino)) {
 		clear_inode_flag(F2FS_I(inode), FI_INC_LINK);
 		goto out_unmap_put;
@@ -212,8 +212,10 @@ static int find_fsync_dnodes(struct f2fs_sb_info *sbi, struct list_head *head)
 			if (IS_ERR(entry->inode)) {
 				err = PTR_ERR(entry->inode);
 				kmem_cache_free(fsync_entry_slab, entry);
-				if (err == -ENOENT)
+				if (err == -ENOENT) {
+					err = 0;
 					goto next;
+				}
 				break;
 			}
 			list_add_tail(&entry->list, head);
@@ -346,6 +348,10 @@ static int do_recover_data(struct f2fs_sb_info *sbi, struct inode *inode,
 	if (IS_INODE(page)) {
 		recover_inline_xattr(inode, page);
 	} else if (f2fs_has_xattr_block(ofs_of_node(page))) {
+		/*
+		 * Deprecated; xattr blocks should be found from cold log.
+		 * But, we should remain this for backward compatibility.
+		 */
 		recover_xattr_data(inode, page, blkaddr);
 		goto out;
 	}
@@ -396,14 +402,13 @@ static int do_recover_data(struct f2fs_sb_info *sbi, struct inode *inode,
 
 			/* write dummy data page */
 			recover_data_page(sbi, NULL, &sum, src, dest);
-			update_extent_cache(dest, &dn);
+			dn.data_blkaddr = dest;
+			f2fs_update_extent_cache(&dn);
 			recovered++;
 		}
 		dn.ofs_in_node++;
 	}
 
-	/* write node page in place */
-	set_summary(&sum, dn.nid, 0, 0);
 	if (IS_INODE(dn.node_page))
 		sync_inode_page(&dn);
 
@@ -503,7 +508,7 @@ int recover_fsync_data(struct f2fs_sb_info *sbi)
 	INIT_LIST_HEAD(&inode_list);
 
 	/* step #1: find fsynced inode numbers */
-	sbi->por_doing = true;
+	set_sbi_flag(sbi, SBI_POR_DOING);
 
 	/* prevent checkpoint */
 	mutex_lock(&sbi->cp_mutex);
@@ -536,7 +541,7 @@ out:
 		truncate_inode_pages(META_MAPPING(sbi), 0);
 	}
 
-	sbi->por_doing = false;
+	clear_sbi_flag(sbi, SBI_POR_DOING);
 	if (err) {
 		discard_next_dnode(sbi, blkaddr);
 
